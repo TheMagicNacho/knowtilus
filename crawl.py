@@ -1,0 +1,201 @@
+# Create an application reads all the pdf files in the directory the user passes as an argument.
+
+import os
+import sys
+import PyPDF2
+import json
+import logging
+from json import JSONEncoder
+
+from transformers import pipeline
+import torch
+from sentence_transformers import SentenceTransformer
+
+logging.basicConfig(level=logging.DEBUG)
+
+class ReportEncoder(JSONEncoder):
+    def default(self, o):
+        return o.__dict__
+
+class Database:
+    def __init__(self):
+        self.files_reports = {}
+
+    def add(self, file_report):
+        # Allow for file_report to be serialized
+        self.files_reports[file_report.filename] = file_report
+                # report = json.dumps(file_report, indent=4, cls=ReportEncoder)
+        # self.files_reports.append(report)
+    
+
+    
+    def dump_to_disk(self):
+        data = json.dumps(self.files_reports, cls=ReportEncoder)
+        # data = self.files_reports
+        # TODO: have the databasse save to the directory of the pdf files.
+        with open('database.json', 'w') as f:
+            f.write(data)
+            f.close()
+            logging.info("Index Success")
+
+class FileAnalysis:
+    def __init__(self, filename):
+        # filename is the name of the file associated with this analysis.
+        self.filename = filename
+        # The sumary of the text using a hugging face model.
+        self.summary = ""
+        # Simple frequency analysis of the text. Includes the count of each word in the text.
+        self.frequency = {}
+        # Vectorization as numpy array of the text for vector searching.
+        self.vectorization = []
+        # Array of strings. Keywords are found using an n-gram analysis.
+        self.keywords = []
+
+    def add_keywords(self, keywords):
+        self.keywords = keywords
+
+    def add_vectorization(self, vectorization):
+        self.vectorization = vectorization.tolist()
+
+    def add_summary(self, summary):
+        if self.summary:
+            self.summary = self.summary + '::' + summary
+        else:
+            self.summary = summary
+
+    def add_frequency(self, freq_analysis):
+        self.frequency = freq_analysis
+    
+    def dump_json(self):
+        d = json.dumps(self.serialize())
+        with open(self.filename + '-report.json', 'w') as f:
+            f.write(d)
+            f.close()
+
+    def serialize(self):
+        return {
+            'filename': self.filename,
+            'summary': self.summary,
+            'frequency': self.frequency,
+            'vectorization': self.vectorization,
+            'keywords': self.keywords
+        }
+
+def read_pdf_files(directory):
+    db = Database()
+    for filename in os.listdir(directory):
+        if filename.endswith('.pdf'):
+            pdf_file = open(directory
+                            + '/' + filename, 'rb')
+            pdf_reader = PyPDF2.PdfFileReader(pdf_file)
+            logging.info("Analyzing New File")
+
+            for page_num in range(pdf_reader.numPages):
+                page = pdf_reader.getPage(page_num)
+                logging.info("Analyzing: " + filename + str(page_num))
+                extracted_text = page.extract_text()
+                logging.debug("Found Text: ", extracted_text)
+                #  TODO: Turn this analysis into a function for easy reuse.
+                fa = FileAnalysis(filename + '-p' + str(page_num))
+                keywords = keyword_analysis(extracted_text)
+                fa.add_keywords(keywords)
+                logging.debug("Keywords: ", keywords)
+
+                embedings = vectorize(extracted_text)
+                fa.add_vectorization(embedings)
+                logging.debug("Vectors: ", embedings)
+
+                summary = summarizer(extracted_text)
+                fa.add_summary(summary[0]['summary_text'])
+                logging.debug("Summary: ", summary)
+                
+                freq = frequency_analysis(extracted_text)
+                fa.add_frequency(freq)
+                logging.debug("Frequency: ", freq)
+
+                db.add(fa)
+            pdf_file.close()
+    db.dump_to_disk()
+
+
+def frequency_analysis(text):
+    words = remove_punctuation(text).lower().split()
+    freq = {}
+    for word in words:
+        if word in freq:
+            freq[word] += 1
+        else:
+            freq[word] = 1
+    return freq
+
+def keyword_analysis(text, n=1, min_count=2):
+    text = remove_punctuation(text).lower()
+
+    stopwords = {'a', 'the', 'is', 'of', 'in', 'and', 'on', 'to', 'as', 'at', 'by', 'for', 'an', 'with', 'from', 'that', 'this', 'these', 'those', 'it', 'its', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'but', 'not', 'or', 'if', 'because', 'so', 'such', 'too', 'very', 'can', 'will', 'would', 'should', 'may', 'might', 'must', 'shall', 'than', 'then', 'just', 'also', 'now', 'here', 'there', 'where', 'when', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'own', 'same', 'than', 'too', 'very', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '−→'}
+
+    words = [word for word in text.split() if word.lower() not in stopwords]
+    ngrams = []
+    for i in range(len(words)-n+1):
+        ngram = tuple(words[i:i+n])
+        ngrams.append(ngram)
+
+    ngram_counts = {}
+    for ngram in ngrams:
+        if ngram not in ngram_counts:
+            ngram_counts[ngram] = 0
+        ngram_counts[ngram] += 1
+
+    filtered_counts = {ngram: count for ngram, count in ngram_counts.items() if count >= min_count}
+    top_ngrams = []
+    for ngram, count in sorted(filtered_counts.items(), key=lambda item: item[1], reverse=True):
+        top_ngrams.append((ngram, count))
+        if len(top_ngrams) == 10:
+            break
+    top_ngrams.sort(key=lambda item: item[1], reverse=True)
+    keywords = []
+    for ngram, count in top_ngrams:
+        keyword = ' '.join(ngram)
+        if len(keyword) > 1:
+            keywords.append(keyword)
+    return keywords
+
+
+def vectorize(text):
+    # REF: https://huggingface.co/sentence-transformers/all-mpnet-base-v2
+    sentences = text.lower().replace('\n', '.').replace('!', '.').replace('?', '.').split('.')
+    model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+    embeddings = model.encode(sentences)
+    return embeddings
+
+def remove_punctuation(text):
+
+  punctuation = "!\"#$~%&()*,+,/:;.<=>?@[\\]^-_`{|}~"
+  no_punct_text = text.translate(str.maketrans('', '', punctuation))
+  return no_punct_text
+
+def summarizer(input_text):
+    summarizer = pipeline(
+        "summarization",
+        'pszemraj/led-base-book-summary',
+        device=0 if torch.cuda.is_available() else -1,
+    )
+
+    result = summarizer(
+        input_text,
+        min_length=16,
+        max_length=256,
+        no_repeat_ngram_size=3,
+        encoder_no_repeat_ngram_size=3,
+        repetition_penalty=3.5,
+        num_beams=4,
+        early_stopping=True,
+    )
+
+    return result
+
+
+if len(sys.argv) != 2:
+    print('Usage: python main.py <directory>')
+    sys.exit(1)
+directory = sys.argv[1]
+read_pdf_files(directory)

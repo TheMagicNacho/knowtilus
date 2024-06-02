@@ -1,4 +1,4 @@
-# knowtilus
+# knowtilus::PROTOTYPE
 knowtilus (noʊ-TILL-uhs) - noun : A sea creature of exceptional navigational skills specializing in knowledge.
 
 knowtilus is a simple search engine indexer for your desktop.
@@ -10,7 +10,14 @@ By leveraging AI and statistical methods, knowtilus can create a database within
 3. Install the required packages
 4. Run the app
 ```bash
-python3 main.py <path/to/your/dataset>
+python3 crawl.py <path/to/your/dataset>
+```
+
+This will create a database in your current working directory with the name `database.json`.
+
+5. Search for a query
+```bash
+python3 search.py <query>
 ```
 
 
