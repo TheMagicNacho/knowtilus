@@ -13,6 +13,14 @@ from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.DEBUG)
 
+vector_transformer = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+
+summary_transformer = pipeline(
+        "summarization",
+        'pszemraj/led-base-book-summary',
+        device=0 if torch.cuda.is_available() else -1,
+    )
+
 class ReportEncoder(JSONEncoder):
     def default(self, o):
         return o.__dict__
@@ -29,14 +37,15 @@ class Database:
     
 
     
-    def dump_to_disk(self):
-        data = json.dumps(self.files_reports, cls=ReportEncoder)
+    def serialize(self):
+        return json.dumps(self.files_reports, cls=ReportEncoder)
         # data = self.files_reports
         # TODO: have the databasse save to the directory of the pdf files.
-        with open('database.json', 'w') as f:
-            f.write(data)
-            f.close()
-            logging.info("Index Success")
+        # with open('database.json', 'w') as f:
+        #     f.write(data)
+        #     f.close()
+        #     logging.info("Index Success")
+
 
 class FileAnalysis:
     def __init__(self, filename):
@@ -94,28 +103,42 @@ def read_pdf_files(directory):
                 page = pdf_reader.getPage(page_num)
                 logging.info("Analyzing: " + filename + str(page_num))
                 extracted_text = page.extract_text()
-                logging.debug("Found Text: ", extracted_text)
+                logging.debug("Found Text: " + str(extracted_text))
                 #  TODO: Turn this analysis into a function for easy reuse.
                 fa = FileAnalysis(filename + '-p' + str(page_num))
                 keywords = keyword_analysis(extracted_text)
                 fa.add_keywords(keywords)
-                logging.debug("Keywords: ", keywords)
+                status_keywords = "Keywords: " + str(keywords)
+                logging.debug(status_keywords)
 
-                embedings = vectorize(extracted_text)
-                fa.add_vectorization(embedings)
-                logging.debug("Vectors: ", embedings)
+                embeddings = vectorize(extracted_text)
+                fa.add_vectorization(embeddings)
+                status_vector = "Vectors: " + str(embeddings)
+                logging.debug(status_vector)
 
                 summary = summarizer(extracted_text)
                 fa.add_summary(summary[0]['summary_text'])
-                logging.debug("Summary: ", summary)
+                status_summary = "Summary: " + str(summary[0]['summary_text'])
+                logging.debug(status_summary)
                 
                 freq = frequency_analysis(extracted_text)
                 fa.add_frequency(freq)
-                logging.debug("Frequency: ", freq)
+                status_frequency = "Frequency: " + str(freq)
+                logging.debug(status_frequency)
 
                 db.add(fa)
             pdf_file.close()
-    db.dump_to_disk()
+    serialized_db = db.serialize()
+    path = os.path.join(directory, 'knowtilus.db')
+    #  TODO : append and write to the database whenever a file completes analysis so that progress is saved
+    # TODO : Only process files that have not been processed before.
+    with open(path, 'w') as f:
+        f.write(serialized_db)
+        f.close()
+        logging.info("Index Success")
+
+
+    
 
 
 def frequency_analysis(text):
@@ -163,24 +186,17 @@ def keyword_analysis(text, n=1, min_count=2):
 def vectorize(text):
     # REF: https://huggingface.co/sentence-transformers/all-mpnet-base-v2
     sentences = text.lower().replace('\n', '.').replace('!', '.').replace('?', '.').split('.')
-    model = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
-    embeddings = model.encode(sentences)
+
+    embeddings = vector_transformer.encode(sentences)
     return embeddings
 
 def remove_punctuation(text):
 
-  punctuation = "!\"#$~%&()*,+,/:;.<=>?@[\\]^-_`{|}~"
-  no_punct_text = text.translate(str.maketrans('', '', punctuation))
-  return no_punct_text
+    punctuation = "!\"#$~%&()*,+,/:;.<=>?@[\\]^-_`{|}~"
+    return text.translate(str.maketrans('', '', punctuation))
 
 def summarizer(input_text):
-    summarizer = pipeline(
-        "summarization",
-        'pszemraj/led-base-book-summary',
-        device=0 if torch.cuda.is_available() else -1,
-    )
-
-    result = summarizer(
+    return summary_transformer(
         input_text,
         min_length=16,
         max_length=256,
@@ -190,8 +206,6 @@ def summarizer(input_text):
         num_beams=4,
         early_stopping=True,
     )
-
-    return result
 
 
 if len(sys.argv) != 2:
