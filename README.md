@@ -20,7 +20,13 @@ This will create a database in your current working directory with the name `dat
 python3 search.py <query>
 ```
 
+🔍 ** Searching **
+When searching, use the lowest root word possible. For example, if you are searching for "running", use "run" instead.
+This is because features are matched against fuzzy matches of the query.
 
+This is not a perfect knowledge engine, so asking questions does not yeild the best results. 
+
+Knowtilus is great at finding concepts within a body of knowledge. For example: "Cell Growth" or "Attomic Wells".
 
 
 Notes:

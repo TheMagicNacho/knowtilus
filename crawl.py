@@ -6,7 +6,6 @@ import PyPDF2
 import json
 import logging
 from json import JSONEncoder
-
 from transformers import pipeline
 import torch
 from sentence_transformers import SentenceTransformer
@@ -35,16 +34,16 @@ class Database:
                 # report = json.dumps(file_report, indent=4, cls=ReportEncoder)
         # self.files_reports.append(report)
     
+    def load_json(self, json_string):
+        try:
+            self.files_reports = json.loads(json_string)
+        except Exception as e:
+            logging.error(e)
+            self.files_reports = {}
 
     
     def serialize(self):
         return json.dumps(self.files_reports, cls=ReportEncoder)
-        # data = self.files_reports
-        # TODO: have the databasse save to the directory of the pdf files.
-        # with open('database.json', 'w') as f:
-        #     f.write(data)
-        #     f.close()
-        #     logging.info("Index Success")
 
 
 class FileAnalysis:
@@ -59,6 +58,10 @@ class FileAnalysis:
         self.vectorization = []
         # Array of strings. Keywords are found using an n-gram analysis.
         self.keywords = []
+        self.title = ""
+
+    def add_title(self, title):
+        self.title = title
 
     def add_keywords(self, keywords):
         self.keywords = keywords
@@ -87,58 +90,84 @@ class FileAnalysis:
             'summary': self.summary,
             'frequency': self.frequency,
             'vectorization': self.vectorization,
-            'keywords': self.keywords
+            'keywords': self.keywords,
+            'title': self.title
         }
 
-def read_pdf_files(directory):
+def load_database(directory):
     db = Database()
-    for filename in os.listdir(directory):
-        if filename.endswith('.pdf'):
-            pdf_file = open(directory
-                            + '/' + filename, 'rb')
-            pdf_reader = PyPDF2.PdfFileReader(pdf_file)
-            logging.info("Analyzing New File")
+    database = os.path.join(directory, 'knowtilus.db')
+    if not os.path.exists(database):
+        logging.info("Creating New Database")
+        return db
+    else:
+        with open(database, 'r') as file:
+            string = file.read()
+            db.load_json(string)
+            file.close()
+            logging.info("Existing database loaded.")
+            return db
 
-            for page_num in range(pdf_reader.numPages):
-                page = pdf_reader.getPage(page_num)
-                logging.info("Analyzing: " + filename + str(page_num))
-                extracted_text = page.extract_text()
-                logging.debug("Found Text: " + str(extracted_text))
-                #  TODO: Turn this analysis into a function for easy reuse.
-                fa = FileAnalysis(filename + '-p' + str(page_num))
-                keywords = keyword_analysis(extracted_text)
-                fa.add_keywords(keywords)
-                status_keywords = "Keywords: " + str(keywords)
-                logging.debug(status_keywords)
-
-                embeddings = vectorize(extracted_text)
-                fa.add_vectorization(embeddings)
-                status_vector = "Vectors: " + str(embeddings)
-                logging.debug(status_vector)
-
-                summary = summarizer(extracted_text)
-                fa.add_summary(summary[0]['summary_text'])
-                status_summary = "Summary: " + str(summary[0]['summary_text'])
-                logging.debug(status_summary)
-                
-                freq = frequency_analysis(extracted_text)
-                fa.add_frequency(freq)
-                status_frequency = "Frequency: " + str(freq)
-                logging.debug(status_frequency)
-
-                db.add(fa)
-            pdf_file.close()
-    serialized_db = db.serialize()
+def read_pdf_files(directory):
     path = os.path.join(directory, 'knowtilus.db')
-    #  TODO : append and write to the database whenever a file completes analysis so that progress is saved
-    # TODO : Only process files that have not been processed before.
+    db = load_database(directory)
+    try:
+        for filename in os.listdir(directory):
+            if filename.endswith('.pdf'):
+                pdf_file = open(directory
+                                + '/' + filename, 'rb')
+                pdf_reader = PyPDF2.PdfFileReader(pdf_file)
+                logging.info("Analyzing New File")
+                # document_title = pdf_reader.getDocumentInfo().title
+
+                for page_num in range(pdf_reader.numPages):
+                    page = pdf_reader.getPage(page_num)
+                    human_page = page_num + 1
+                    analysis_key = filename + '-p' + str(human_page)
+                    if db.files_reports.get(analysis_key):
+                        logging.info("Skipping: " + analysis_key)
+                        continue 
+                    logging.info("Analyzing: " + analysis_key)
+                    extracted_text = page.extract_text()
+                    logging.debug("Found Text: " + str(extracted_text))
+                    #  TODO: Turn this analysis into a function for easy reuse.
+                    fa = FileAnalysis(analysis_key)
+                    keywords = keyword_analysis(extracted_text)
+                    fa.add_keywords(keywords)
+                    status_keywords = "Keywords: " + str(keywords)
+                    logging.debug(status_keywords)
+
+                    embeddings = vectorize(extracted_text)
+                    fa.add_vectorization(embeddings)
+                    status_vector = "Vectors: " + str(embeddings)
+                    logging.debug(status_vector)
+
+                    summary = summarizer(extracted_text)
+                    fa.add_summary(summary[0]['summary_text'])
+                    status_summary = "Summary: " + str(summary[0]['summary_text'])
+                    logging.debug(status_summary)
+                    
+                    freq = frequency_analysis(extracted_text)
+                    fa.add_frequency(freq)
+                    status_frequency = "Frequency: " + str(freq)
+                    logging.debug(status_frequency)
+
+                    # fa.add_title(document_title)
+                    db.add(fa)
+    except KeyboardInterrupt:
+        logging.error("Keyboard Interrupt")
+        pdf_file.close()
+        write_to_disk(db.serialize(), path)
+        sys.exit(1)
+    pdf_file.close()
+    serialized_db = db.serialize()
+    write_to_disk(serialized_db, path)
+
+def write_to_disk(serialized_db, path):
     with open(path, 'w') as f:
         f.write(serialized_db)
         f.close()
-        logging.info("Index Success")
-
-
-    
+        logging.info("Write Success")
 
 
 def frequency_analysis(text):
@@ -198,8 +227,8 @@ def remove_punctuation(text):
 def summarizer(input_text):
     return summary_transformer(
         input_text,
-        min_length=16,
-        max_length=256,
+        min_length=5,
+        max_length=100,
         no_repeat_ngram_size=3,
         encoder_no_repeat_ngram_size=3,
         repetition_penalty=3.5,
@@ -207,9 +236,15 @@ def summarizer(input_text):
         early_stopping=True,
     )
 
-
-if len(sys.argv) != 2:
-    print('Usage: python main.py <directory>')
+try:
+    if len(sys.argv) != 2:
+        print('Usage: python main.py <directory>')
+        sys.exit(1)
+    directory = sys.argv[1]
+    read_pdf_files(directory)
+   
+except Exception as e:
+    logging.error(e)
     sys.exit(1)
-directory = sys.argv[1]
-read_pdf_files(directory)
+
+
