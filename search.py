@@ -49,7 +49,7 @@ matrix['score'] = 0
 # TODO: Make each score a column the create a weighted average of the scores
 
  # vector, keywords, summary, frequency, file_name
-score_weights = [95, 93, 61, 83, 52]
+score_weights = [20, 15, 10, 40, 15]
 
 def search(search_string):
     user_input = search_string.lower().split()
@@ -75,8 +75,8 @@ def search(search_string):
                 summary_score = 1
 
             frequency = row['frequency']
-            freq_score = frequency[search_input] if search_input in frequency else 0
-      
+            freq_score += frequency[search_input] if search_input in frequency else 0
+
             keywords = row['keywords']
             for keyword in keywords:
                 if re.search(search_input, keyword, re.IGNORECASE):
@@ -106,7 +106,7 @@ def main():
     search(search_string)
     print("KNOWTILUS SEARCH RESULTS")
     res = matrix.sort_values(by='score', ascending=False).head(10)
-    print(tabulate(res[['score', 'filename', 'keywords']], headers='keys', tablefmt='psql', showindex='never'))
+    print(tabulate(res[['filename', 'score']], headers='keys', tablefmt='psql', showindex='never'))
 
 
     sumarize = input("Do you want to see the summary of the top result? (y/n): ")
