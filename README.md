@@ -1,5 +1,6 @@
 # knowtilus::PROTOTYPE
 knowtilus (noʊ-TILL-uhs) - noun : A sea creature of exceptional navigational skills specializing in knowledge.
+`as a prototype, this is unstable and prone to change. I also plan to re-write in rust`
 
 knowtilus is a simple search engine indexer for your desktop.
 By leveraging AI and statistical methods, knowtilus can create a database within a directory for quick and easy search in the future.
