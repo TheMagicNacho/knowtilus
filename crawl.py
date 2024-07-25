@@ -3,6 +3,7 @@
 import os
 import sys
 import PyPDF2
+from fpdf import FPDF
 import json
 import logging
 from json import JSONEncoder
@@ -236,11 +237,26 @@ def summarizer(input_text):
         early_stopping=True,
     )
 
+def convert_txt_to_pdf(directory):
+    for filename in os.listdir(directory):
+        if filename.endswith('.txt') and not filename.endswith('.pdf'):
+            with open(directory + '/' + filename, 'r') as file:
+                text = file.read()
+                file.close()
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Courier New", size=11)
+                pdf.multi_cell(0, 10, text)
+                pdf.output(directory + '/' + filename + '.pdf')
+                os.remove(directory
+                            + '/' + filename)
+
 try:
     if len(sys.argv) != 2:
         print('Usage: python main.py <directory>')
         sys.exit(1)
     directory = sys.argv[1]
+    convert_txt_to_pdf(directory)
     read_pdf_files(directory)
    
 except Exception as e:
