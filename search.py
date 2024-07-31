@@ -92,13 +92,11 @@ def search(search_string):
             
             score_array = [vectorization_score, keywords_score, summary_score, freq_score, filename_score]
 
-            print("Score array: ", score_array)
             final_score = np.average(a =score_array, weights= score_weights)
             # matrix.at[index, 'score'] += vectorization_score
             # matrix.at[index, 'score'] += summary_score
             # matrix.at[index, 'score'] += keywords_score
             # matrix.at[index, 'score'] += freq_score
-            print("final score: ", final_score)
             matrix.at[index, 'score'] = final_score
         
         return matrix

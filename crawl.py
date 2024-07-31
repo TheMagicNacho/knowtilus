@@ -245,7 +245,7 @@ def convert_txt_to_pdf(directory):
                 file.close()
                 pdf = FPDF()
                 pdf.add_page()
-                pdf.set_font("Courier New", size=11)
+                pdf.set_font("Courier", size=11)
                 pdf.multi_cell(0, 10, text)
                 pdf.output(directory + '/' + filename + '.pdf')
                 os.remove(directory
