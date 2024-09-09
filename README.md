@@ -36,8 +36,12 @@ Notes:
 
 
 # knowtilus::TODO
-- [ ] Implement a more robust query augmentation
+- [x] Implement a more robust query augmentation
 - [ ] Add image classification on crawl
+- [ ] Implement a lamenter
+- [ ] Implement a dictionary to check if words exist
+- [ ] Implement a spell checker
+
 
 
 # Lexer
@@ -60,4 +64,13 @@ Filenames provide a wealth of information about the document. This is used to ge
 ## Summary
 The summary is AI generated. And if the user searches for a word, and that word is found in the summary a score is provided. 
 Testing has proven that AI generated summaries do not work well. Weight scores from a summary should be low.
+
+
+# Notes on the FFT
+I had an idea, previously. To use an FFT to help process the score signal and highlight files which were more relevent.
+Unfortunately, this method did not actually provide useful results for the user. It consistantly underperformed the liniar function.
+I have since removed the FFT from the codebase.
+
+Instead, I have opted to using a Sigmoid function to process the scores into a number between 0 and 1. This is then used to rank the files.
+The delta between the max and score can help group files together. This is useful for the user to see which files are more relevent in conjunction.
 
