@@ -38,3 +38,26 @@ Notes:
 # knowtilus::TODO
 - [ ] Implement a more robust query augmentation
 - [ ] Add image classification on crawl
+
+
+# Lexer
+The lexer is a class. "Lex".
+Lex contains
+- tokens : Words that are found in the corpus and split by spaces. Tokens are lammented to their root word.
+- senteces : a list of sentences that are found in the corpus. Helpful for generating summaries and context around a word.
+- text : the raw text of the corpus as a string. This is stripped of punctionation.
+# Database Features
+
+## Vector
+An array of floats that represent the word in a high dimensional space. This is used for similarity matching.
+
+## Keywords
+Generated using n-grams and analyzed using the text from lex.
+
+## Filename
+Filenames provide a wealth of information about the document. This is used to generate a summary of the document.
+
+## Summary
+The summary is AI generated. And if the user searches for a word, and that word is found in the summary a score is provided. 
+Testing has proven that AI generated summaries do not work well. Weight scores from a summary should be low.
+

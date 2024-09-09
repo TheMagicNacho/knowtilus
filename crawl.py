@@ -11,6 +11,9 @@ from transformers import pipeline
 import torch
 from sentence_transformers import SentenceTransformer
 
+from core import Lex
+
+
 logging.basicConfig(level=logging.DEBUG)
 
 vector_transformer = SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
@@ -129,26 +132,29 @@ def read_pdf_files(directory):
                         logging.info("Skipping: " + analysis_key)
                         continue 
                     logging.info("Analyzing: " + analysis_key)
-                    extracted_text = page.extract_text()
-                    logging.debug("Found Text: " + str(extracted_text))
+                    # extracted_text = page.extract_text()
+                    lex = Lex(page.extract_text())
+
+                    logging.debug("Found Text: " + lex.get_text())
                     #  TODO: Turn this analysis into a function for easy reuse.
                     fa = FileAnalysis(analysis_key)
-                    keywords = keyword_analysis(extracted_text)
+
+                    keywords = keyword_analysis(lex)
                     fa.add_keywords(keywords)
                     status_keywords = "Keywords: " + str(keywords)
                     logging.debug(status_keywords)
 
-                    embeddings = vectorize(extracted_text)
+                    embeddings = vectorize(lex)
                     fa.add_vectorization(embeddings)
-                    status_vector = "Vectors: " + str(embeddings)
-                    logging.debug(status_vector)
+                    # status_vector = "Vectors: " + str(embeddings)
+                    # logging.debug(status_vector)
 
-                    summary = summarizer(extracted_text)
+                    summary = summarizer(lex)
                     fa.add_summary(summary[0]['summary_text'])
                     status_summary = "Summary: " + str(summary[0]['summary_text'])
                     logging.debug(status_summary)
-                    
-                    freq = frequency_analysis(extracted_text)
+
+                    freq = frequency_analysis(lex)
                     fa.add_frequency(freq)
                     status_frequency = "Frequency: " + str(freq)
                     logging.debug(status_frequency)
@@ -171,22 +177,27 @@ def write_to_disk(serialized_db, path):
         logging.info("Write Success")
 
 
-def frequency_analysis(text):
-    words = remove_punctuation(text).lower().split()
+def frequency_analysis(lex):
+    # words = remove_punctuation(text).lower().split()
+    # words = Core.condition_text(text).split()
+
     freq = {}
-    for word in words:
+    for word in lex.get_tokens():
         if word in freq:
             freq[word] += 1
         else:
             freq[word] = 1
     return freq
 
-def keyword_analysis(text, n=1, min_count=2):
-    text = remove_punctuation(text).lower()
+def keyword_analysis(lex, n=1, min_count=2):
+    # text = remove_punctuation(text).lower()
+    # words = Core.condition_text(text)
 
-    stopwords = {'a', 'the', 'is', 'of', 'in', 'and', 'on', 'to', 'as', 'at', 'by', 'for', 'an', 'with', 'from', 'that', 'this', 'these', 'those', 'it', 'its', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'but', 'not', 'or', 'if', 'because', 'so', 'such', 'too', 'very', 'can', 'will', 'would', 'should', 'may', 'might', 'must', 'shall', 'than', 'then', 'just', 'also', 'now', 'here', 'there', 'where', 'when', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'own', 'same', 'than', 'too', 'very', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '−→'}
+    # stopwords = {'a', 'the', 'is', 'of', 'in', 'and', 'on', 'to', 'as', 'at', 'by', 'for', 'an', 'with', 'from', 'that', 'this', 'these', 'those', 'it', 'its', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'but', 'not', 'or', 'if', 'because', 'so', 'such', 'too', 'very', 'can', 'will', 'would', 'should', 'may', 'might', 'must', 'shall', 'than', 'then', 'just', 'also', 'now', 'here', 'there', 'where', 'when', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'own', 'same', 'than', 'too', 'very', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '−→'}
 
-    words = [word for word in text.split() if word.lower() not in stopwords]
+    # words = [word for word in text.split() if word.lower() not in stopwords]
+    # words = Core.process_stopwords(text)
+    words = lex.get_tokens()
     ngrams = []
     for i in range(len(words)-n+1):
         ngram = tuple(words[i:i+n])
@@ -213,19 +224,21 @@ def keyword_analysis(text, n=1, min_count=2):
     return keywords
 
 
-def vectorize(text):
+def vectorize(lex):
+    # text = Core.process_stopwords(text.lower())
     # REF: https://huggingface.co/sentence-transformers/all-mpnet-base-v2
-    sentences = text.lower().replace('\n', '.').replace('!', '.').replace('?', '.').split('.')
+    # sentences = text.replace('\n', '.').replace('!', '.').replace('?', '.').split('.')
+    sentences = lex.get_sentences()
 
     embeddings = vector_transformer.encode(sentences)
     return embeddings
 
-def remove_punctuation(text):
+# def remove_punctuation(text):
+#     punctuation = "!\"#$~%&()*,+,/:;.<=>?@[\\]^-_`{|}~"
+#     return text.translate(str.maketrans('', '', punctuation))
 
-    punctuation = "!\"#$~%&()*,+,/:;.<=>?@[\\]^-_`{|}~"
-    return text.translate(str.maketrans('', '', punctuation))
-
-def summarizer(input_text):
+def summarizer(lex):
+    input_text = lex.get_text()
     return summary_transformer(
         input_text,
         min_length=5,
