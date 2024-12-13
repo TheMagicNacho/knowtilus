@@ -2,6 +2,9 @@ pub mod common;
 pub mod crawl;
 pub mod search;
 
+pub mod lexer;
+mod lexer_en;
+
 
 #[cfg(test)]
 mod tests {
@@ -9,8 +12,10 @@ mod tests {
 
     #[test]
     fn common_works() {
-        let result = common::add(2, 2);
-        assert_eq!(result, 4);
+        let words = &common::STOPWORDS_EN;
+        let anything = *words.first().unwrap();
+       assert_ne!(anything, "");
+
     }
 
     #[test]

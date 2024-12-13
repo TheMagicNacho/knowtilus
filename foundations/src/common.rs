@@ -1,1 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 { left + right }
+
+
+pub const STOPWORDS_EN: [&str; 3] = ["if", "and", "the"];
+
+pub const PUNCTUATION_EN: [&str; 3] = [".", ",", "!"];
