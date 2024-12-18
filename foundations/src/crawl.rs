@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+use crate::entry::Entry;
 use crate::lexer::Lexer;
 use crate::lexer_en::LexerEnglish;
+
 use lopdf;
 use std::fs::DirEntry;
 use std::io::Error;
@@ -13,116 +15,6 @@ pub fn add(
 {
   left + right
 }
-
-// Originally called the FileReport
-struct Entry
-{
-  /// The filename of the document crawled.
-  title: String,
-  /// The number index, in human terms, of the page crawled.
-  location: u32,
-  /// A summary of the document crawled.
-  /// AI Generated.
-  summary: String,
-  /// The number (value) of times each word (key) appears on a page.
-  frequency: HashMap<String, u32>,
-  /// The vectorized array of words.
-  /// NOTE: Vector does not mean a rust Vec.
-  // TODO : Update this to match the vectorization library
-  vector_words: Vec<u32>,
-  /// The vectorized array of the entire page.
-  /// NOTE: Vector does not mean a rust Vec.
-  vector_page: Vec<u32>,
-  /// The vectorized array of the sentences.
-  /// NOTE: Vector does not mean a rust Vec.
-  vector_sentences: Vec<u32>,
-  /// Keywords extracted from the document using n-gram analysis.
-  keywords: Vec<String>,
-}
-
-impl Entry
-{
-  fn new(
-    &self,
-    title: String,
-    location: u32,
-    content: String,
-  ) -> Result<Entry, Error>
-  {
-    let lexer = LexerEnglish::new();
-
-    let text_lowered = lexer.normalize_input_text(content);
-    let text_cleaned = lexer.remove_punctuation(text_lowered);
-    let token_words_raw = lexer.generate_word_tokens(text_cleaned.clone());
-    let tokens_words = lexer.remove_stopwords(token_words_raw);
-
-    let tokens_sentences = lexer.generate_sentence_tokens(text_cleaned);
-
-    let frequency = Entry::frequency_analysis(tokens_words.clone())?;
-    let keywords = Entry::keyword_analysis(tokens_words)?;
-
-    Ok(Entry {
-      title,
-      location,
-      summary: "".to_string(),
-      frequency,
-      vector_words: Vec::new(),
-      vector_page: Vec::new(),
-      vector_sentences: Vec::new(),
-      keywords,
-    })
-  }
-
-  pub fn frequency_analysis(tokens: Vec<String>) -> Result<HashMap<String, u32>, Error>
-  {
-    let mut frequency: HashMap<String, u32> = HashMap::new();
-
-    for token in tokens {
-      let count = frequency.entry(token).or_insert(0);
-      *count += 1;
-    }
-
-    Ok(frequency)
-  }
-
-  pub fn keyword_analysis(tokens: Vec<String>) -> Result<Vec<String>, Error>
-  {
-    let n = 1;
-
-    let mut ngrams: Vec<Vec<String>> = Vec::new();
-    for i in 0..tokens.len() - n + 1 {
-      let ngram = tokens[i..i + n].to_vec();
-      ngrams.push(ngram);
-    }
-
-    let mut ngram_counts: HashMap<Vec<String>, u32> = HashMap::new();
-    for ngram in ngrams {
-      let count = ngram_counts.entry(ngram).or_insert(0);
-      *count += 1;
-    }
-
-    let mut filtered_counts: HashMap<Vec<String>, u32> = HashMap::new();
-    for (ngram, count) in ngram_counts.iter() {
-      if *count >= 2 {
-        filtered_counts.insert(ngram.clone(), *count);
-      }
-    }
-
-    let mut top_ngrams: Vec<(&Vec<String>, &u32)> = filtered_counts.iter().collect();
-    top_ngrams.sort_by(|a, b| b.1.cmp(a.1));
-
-    let mut keywords: Vec<String> = Vec::new();
-    for (ngram, _) in top_ngrams.iter().take(10) {
-      let keyword = ngram.join(" ");
-      if keyword.len() > 1 {
-        keywords.push(keyword);
-      }
-    }
-
-    Ok(keywords)
-  }
-}
-
 struct Crawler
 {
   lexer: LexerEnglish,
@@ -189,6 +81,19 @@ impl Crawler
 
       println!("Page: {}", page_num);
       println!("{}", content);
+
+      let path = file_path
+        .path()
+        .to_str()
+        .unwrap_or_default()
+        .to_string()
+        .parse()
+        .unwrap_or_default();
+      let new_entry = Entry::new(file_path.file_name().into_string().unwrap(), path, content);
+
+      // TODO: Working here.
+      // Now that the entry is created, we need to persist the entry in the
+      // database.
     }
     Ok(())
   }

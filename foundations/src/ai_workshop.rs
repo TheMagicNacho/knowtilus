@@ -19,7 +19,7 @@ use rust_bert::pipelines::sentence_embeddings::{
 use rust_bert::pipelines::summarization::{SummarizationConfig, SummarizationModel};
 
 
-fn ai_summarizer(input: &str) -> Result<String, Box<dyn std::error::Error>>
+fn ai_summarizer(input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>>
 {
   let config = SummarizationConfig {
     min_length: 10,
@@ -33,7 +33,7 @@ fn ai_summarizer(input: &str) -> Result<String, Box<dyn std::error::Error>>
   let input_array = [input];
   let output = model.summarize(&input_array)?;
 
-  Ok(output[0].clone())
+  Ok(output.clone())
 }
 
 fn qa_workshop(

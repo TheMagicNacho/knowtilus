@@ -1,5 +1,8 @@
 use crate::common::{PUNCTUATION_EN, STOPWORDS_EN};
 use crate::lexer::Lexer;
+use rust_bert::pipelines::sentence_embeddings::{
+  Embedding, SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType,
+};
 use std::collections::HashSet;
 
 pub(crate) struct LexerEnglish
@@ -95,6 +98,18 @@ impl Lexer for LexerEnglish
       .into_iter()
       .filter(|t| !self.stopwords.contains(t))
       .collect()
+  }
+
+  fn generate_embedding(
+    &self,
+    tokens: Vec<String>,
+  ) -> Vec<Embedding>
+  {
+    let model = SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
+      .create_model()
+      .unwrap();
+
+    model.encode(&tokens).unwrap()
   }
 }
 

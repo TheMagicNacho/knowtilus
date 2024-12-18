@@ -1,3 +1,5 @@
+use rust_bert::pipelines::sentence_embeddings::Embedding;
+
 /// A lexer contains tools required to actively and in a common manner process
 /// input texts.
 pub trait Lexer
@@ -42,6 +44,13 @@ pub trait Lexer
     &self,
     tokens: Vec<String>,
   ) -> Vec<String>;
+
+  /// An embedding is a vector representation of a word or sentence.
+  /// The vector representation is used to compare words and sentences.
+  fn generate_embedding(
+    &self,
+    tokens: Vec<String>,
+  ) -> Vec<Embedding>;
 
   // TODO: Lament the tokens
 

@@ -3,6 +3,10 @@ pub mod crawl;
 pub mod search;
 
 pub mod lexer;
+
+pub mod ai_workshop;
+
+mod entry;
 mod lexer_en;
 
 #[cfg(test)]
