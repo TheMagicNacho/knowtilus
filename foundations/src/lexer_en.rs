@@ -105,6 +105,7 @@ impl Lexer for LexerEnglish
     tokens: Vec<String>,
   ) -> Vec<Embedding>
   {
+    // TODO: Allow the models to cache to a location.
     let model = SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2)
       .create_model()
       .unwrap();

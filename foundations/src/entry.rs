@@ -2,9 +2,8 @@ use crate::lexer::Lexer;
 use crate::lexer_en::LexerEnglish;
 use rust_bert::pipelines::sentence_embeddings::Embedding;
 use rust_bert::pipelines::summarization::{SummarizationConfig, SummarizationModel};
-use rust_bert::RustBertError;
 use std::collections::HashMap;
-use std::io::Error;
+use std::fmt::Error;
 
 // Originally called the FileReport
 #[derive(Debug)]
@@ -14,6 +13,7 @@ pub(crate) struct Entry
   title: String,
   /// The number index, in human terms, of the page crawled.
   location: u32,
+  // TODO: Allow for path
   /// A summary of the document crawled.
   /// AI Generated.
   summary: String,
@@ -21,7 +21,6 @@ pub(crate) struct Entry
   frequency: HashMap<String, u32>,
   /// The vectorized array of words.
   /// NOTE: Vector does not mean a rust Vec.
-  // TODO : Update this to match the vectorization library
   embedding_words: Vec<Embedding>,
   /// The vectorized array of the entire page.
   /// NOTE: Vector does not mean a rust Vec.
@@ -39,7 +38,8 @@ impl Entry
     title: String,
     location: u32,
     content: String,
-  ) -> Result<Entry, RustBertError>
+    // ) -> Option<Entry>
+  ) -> Result<Entry, Error>
   {
     let config = SummarizationConfig {
       min_length: 10,
@@ -48,10 +48,16 @@ impl Entry
       ..Default::default()
     };
 
-    let model = SummarizationModel::new(config)?;
+    let model = match SummarizationModel::new(config) {
+      Ok(model) => model,
+      _ => return Err(std::fmt::Error),
+    };
 
     let input_array = [content.clone()];
-    let summary = model.summarize(&input_array)?[0].clone();
+    let summary = match model.summarize(&input_array) {
+      Ok(summary) => summary[0].clone(),
+      _ => return Err(std::fmt::Error),
+    };
 
     // General Lexing
     let lexer = LexerEnglish::new();
@@ -85,6 +91,9 @@ impl Entry
     })
   }
 
+  /// Generates a hash map of the tokens found within a string.
+  /// For example, "Forest ran, and ran, and ran."
+  /// forest: 1, ran: 3, and, 2
   pub fn frequency_analysis(tokens: Vec<String>) -> Result<HashMap<String, u32>, Error>
   {
     let mut frequency: HashMap<String, u32> = HashMap::new();
@@ -93,10 +102,12 @@ impl Entry
       let count = frequency.entry(token).or_insert(0);
       *count += 1;
     }
-
     Ok(frequency)
   }
 
+  /// Keywords are extracted from text using n-grams. If there is not a
+  /// sufficient amount of information provided, the analysis will return an
+  /// empty vector.
   pub fn keyword_analysis(tokens: Vec<String>) -> Result<Vec<String>, Error>
   {
     let n = 1;
@@ -132,5 +143,125 @@ impl Entry
     }
 
     Ok(keywords)
+  }
+}
+
+mod tests
+{
+  use super::*;
+
+  #[test]
+  fn can_generate_entity()
+  {
+    let title = "Test Title";
+    let location = 42;
+
+    let story = "Once upon, a time there was a beautiful princess who lived in a dead tree beside a lake, more than anything she desired indoor plumbing. But here mother was missguided and thought that indoor plumbing was invented by the devil. So the princess had do go without.";
+    let content = String::from(story);
+
+    let entry = Entry::new(title.into(), location, content).unwrap();
+
+    println!("Entry: {:?}", entry);
+    assert_eq!(1, 1);
+  }
+
+  #[test]
+  fn frequency_test1()
+  {
+    let sentence = "The Itsy Bitsy Spider climbed up the waterspout. Down came the rain and washed the spider out. Out came the sun and dried up all the rain and the Itsy Bitsy spider climbed up the spout again.".to_string();
+    let lex = LexerEnglish::new();
+    let lower = lex.normalize_input_text(sentence);
+    let cleaned = lex.remove_punctuation(lower);
+    let tokens = lex.generate_word_tokens(cleaned);
+    let stopless = lex.remove_stopwords(tokens);
+    let frequency = Entry::frequency_analysis(stopless).unwrap();
+
+    let mut expected = HashMap::new();
+    expected.insert("rain".to_string(), 2);
+    expected.insert("dried".to_string(), 1);
+    expected.insert("bitsy".to_string(), 2);
+    expected.insert("itsy".to_string(), 2);
+    expected.insert("spider".to_string(), 3);
+    expected.insert("out".to_string(), 2);
+    expected.insert("waterspout".to_string(), 1);
+    expected.insert("again".to_string(), 1);
+    expected.insert("washed".to_string(), 1);
+    expected.insert("sun".to_string(), 1);
+    expected.insert("down".to_string(), 1);
+    expected.insert("all".to_string(), 1);
+    expected.insert("spout".to_string(), 1);
+    expected.insert("up".to_string(), 3);
+    expected.insert("came".to_string(), 2);
+    expected.insert("climbed".to_string(), 2);
+
+    assert_eq!(frequency, expected);
+  }
+
+  #[test]
+  fn keyword_test_basic()
+  {
+    let sentence = "the itsy bitsy spider climbed up the waterspout down came the rain and washed the spider out out came the sun and dried up all the rain and the itsy bitsy spider climbed up the spout again".to_string();
+    let lex = LexerEnglish::new();
+    let lower = lex.normalize_input_text(sentence);
+    let cleaned = lex.remove_punctuation(lower);
+    let tokens = lex.generate_word_tokens(cleaned);
+    let stopless = lex.remove_stopwords(tokens);
+    let keywords = Entry::keyword_analysis(stopless).unwrap();
+
+    let expected = vec![
+      "spider".to_string(),
+      "up".to_string(),
+      "itsy".to_string(),
+      "climbed".to_string(),
+      "rain".to_string(),
+      "came".to_string(),
+      "bitsy".to_string(),
+      "out".to_string(),
+    ];
+
+    for keyword in expected {
+      assert!(keywords.contains(&keyword));
+    }
+  }
+
+  #[test]
+  fn keyword_test_small_sentence()
+  {
+    let sentence = "the quick brown fox jumps over the lazy dog".to_string();
+    let lex = LexerEnglish::new();
+    let lower = lex.normalize_input_text(sentence);
+    let cleaned = lex.remove_punctuation(lower);
+    let tokens = lex.generate_word_tokens(cleaned);
+    let stopless = lex.remove_stopwords(tokens);
+    let keywords = Entry::keyword_analysis(stopless).unwrap();
+
+    let expected: Vec<String> = Vec::new();
+
+    assert_eq!(keywords, expected);
+  }
+
+  #[test]
+  fn keyword_test3()
+  {
+    let sentence = "Planetary exploration missions are conducted by some of the most sophisticated robots ever built. Through them we extend our senses to the farthest reaches of the solar system and into remote and hostile environments, where the secrets of our origins and destiny lie hidden. The coming years of solar system exploration promise to be the most exciting and productive yet, as we explore entirely new worlds and probe in even greater detail the fascinating environments we have discovered.".to_string();
+    let lex = LexerEnglish::new();
+    let lower = lex.normalize_input_text(sentence);
+    let cleaned = lex.remove_punctuation(lower);
+    let tokens = lex.generate_word_tokens(cleaned);
+    let stopless = lex.remove_stopwords(tokens);
+    let keywords = Entry::keyword_analysis(stopless).unwrap();
+
+    let expected = vec![
+      "exploration".to_string(),
+      "environments".to_string(),
+      "most".to_string(),
+      "solar".to_string(),
+      "our".to_string(),
+      "system".to_string(),
+    ];
+
+    for keyword in expected {
+      assert!(keywords.contains(&keyword));
+    }
   }
 }
