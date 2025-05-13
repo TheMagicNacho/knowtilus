@@ -1,5 +1,5 @@
 mod disk_io;
-mod travlers;
+mod travelers;
 
 #[cfg(test)]
 mod tests
