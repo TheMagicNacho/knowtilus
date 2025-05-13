@@ -1,0 +1,8 @@
+[package]
+name = "knowtilus"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+pdf-extract = "0.9.0"
