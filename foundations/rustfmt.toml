@@ -1,5 +1,0 @@
-fn_params_layout = "Vertical"
-brace_style = "AlwaysNextLine"
-wrap_comments = true
-hard_tabs = false
-tab_spaces = 2
